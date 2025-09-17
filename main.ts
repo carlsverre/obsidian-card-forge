@@ -1,148 +1,174 @@
 import {
   App,
-  Editor,
-  MarkdownView,
-  Modal,
-  Notice,
+  base64ToArrayBuffer,
+  Component,
+  ItemView,
+  MarkdownFileInfo,
+  MarkdownRenderer,
+  Menu,
   Plugin,
-  PluginSettingTab,
-  Setting,
+  TFile,
+  WorkspaceLeaf,
 } from "obsidian";
-
-interface CardForgeSettings {
-  mySetting: string;
-}
-
-const DEFAULT_SETTINGS: CardForgeSettings = {
-  mySetting: "default",
-};
+import { toBlob } from "html-to-image";
+import { Blob } from "buffer";
 
 export default class CardForgePlugin extends Plugin {
-  settings: CardForgeSettings;
+  renderFrame: HTMLIFrameElement;
 
   async onload() {
-    await this.loadSettings();
-
-    // This creates an icon in the left ribbon.
-    const ribbonIconEl = this.addRibbonIcon(
-      "dice",
-      "Sample Plugin",
-      (_evt: MouseEvent) => {
-        // Called when the user clicks the icon.
-        new Notice("This is a notice!");
+    this.renderFrame = createEl("iframe", {
+      attr: {
+        style:
+          "position:fixed;left:-10000px;top:-10000px;width:0;height:0;visibility:hidden;",
       },
-    );
-    // Perform additional things with the ribbon
-    ribbonIconEl.addClass("my-plugin-ribbon-class");
+    });
+    this.app.workspace.containerEl.append(this.renderFrame);
 
-    // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-    const statusBarItemEl = this.addStatusBarItem();
-    statusBarItemEl.setText("Status Bar Text");
+    this.registerView(VIEW_TYPE_PREVIEW, (leaf) => new CardForgePreview(leaf));
 
-    // This adds a simple command that can be triggered anywhere
     this.addCommand({
-      id: "open-sample-modal-simple",
-      name: "Open sample modal (simple)",
-      callback: () => {
-        new SampleModal(this.app).open();
+      id: "card-forge-open-preview",
+      name: "Open Preview",
+      callback: async () => {
+        await this.activatePreview();
       },
     });
-    // This adds an editor command that can perform some operation on the current editor instance
-    this.addCommand({
-      id: "sample-editor-command",
-      name: "Sample editor command",
-      editorCallback: (editor: Editor, _view: MarkdownView) => {
-        console.log(editor.getSelection());
-        editor.replaceSelection("Sample Editor Command");
-      },
-    });
-    // This adds a complex command that can check whether the current state of the app allows execution of the command
-    this.addCommand({
-      id: "open-sample-modal-complex",
-      name: "Open sample modal (complex)",
-      checkCallback: (checking: boolean) => {
-        // Conditions to check
-        const markdownView =
-          this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (markdownView) {
-          // If checking is true, we're simply "checking" if the command can be run.
-          // If checking is false, then we want to actually perform the operation.
-          if (!checking) {
-            new SampleModal(this.app).open();
-          }
-
-          // This command will only show up in Command Palette when the check function returns true
-          return true;
-        }
-      },
-    });
-
-    // This adds a settings tab so the user can configure various aspects of the plugin
-    this.addSettingTab(new SampleSettingTab(this.app, this));
-
-    // If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-    // Using this function will automatically remove the event listener when this plugin is disabled.
-    this.registerDomEvent(document, "click", (evt: MouseEvent) => {
-      console.log("click", evt);
-    });
-
-    // When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-    this.registerInterval(
-      window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000),
-    );
   }
 
   onunload() {}
 
-  async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-  }
+  async activatePreview() {
+    const { workspace } = this.app;
 
-  async saveSettings() {
-    await this.saveData(this.settings);
-  }
-}
+    let leaf: WorkspaceLeaf | null = null;
+    const leaves = workspace.getLeavesOfType(VIEW_TYPE_PREVIEW);
 
-class SampleModal extends Modal {
-  constructor(app: App) {
-    super(app);
-  }
+    if (leaves.length > 0) {
+      leaf = leaves[0];
+    } else {
+      leaf = workspace.getRightLeaf(false);
+      if (leaf) {
+        await leaf.setViewState({ type: VIEW_TYPE_PREVIEW, active: true });
+      }
+    }
 
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.setText("Woah!");
-  }
+    if (!leaf) {
+      throw new Error("failed to activate CardForgePreview");
+    }
 
-  onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+    workspace.revealLeaf(leaf);
   }
 }
 
-class SampleSettingTab extends PluginSettingTab {
-  plugin: CardForgePlugin;
+export const VIEW_TYPE_PREVIEW = "card-forge-preview";
 
-  constructor(app: App, plugin: CardForgePlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
+export class CardForgePreview extends ItemView {
+  active: boolean = false;
+  lastEditor: MarkdownFileInfo | null;
+
+  constructor(leaf: WorkspaceLeaf) {
+    super(leaf);
+    this.icon = "eye";
   }
 
-  display(): void {
-    const { containerEl } = this;
+  getViewType() {
+    return VIEW_TYPE_PREVIEW;
+  }
 
-    containerEl.empty();
+  getDisplayText() {
+    return "Card Forge Preview";
+  }
 
-    new Setting(containerEl)
-      .setName("Setting #1")
-      .setDesc("It's a secret")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter your secret")
-          .setValue(this.plugin.settings.mySetting)
-          .onChange(async (value) => {
-            this.plugin.settings.mySetting = value;
-            await this.plugin.saveSettings();
-          }),
+  async onOpen() {
+    this.active = true;
+    this.contentEl.classList.add("card-forge-preview");
+    this.contentEl.empty();
+
+    this.registerDomEvent(this.containerEl, "contextmenu", (event) => {
+      const menu = new Menu();
+      menu.addItem((item) =>
+        item
+          .setTitle("Copy to clipboard")
+          .setIcon("copy")
+          .onClick(this.renderToClipboard.bind(this)),
       );
+      menu.showAtMouseEvent(event);
+    });
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", this.render.bind(this)),
+    );
+    this.registerEvent(this.app.vault.on("modify", this.render.bind(this)));
+    this.registerEvent(
+      this.app.metadataCache.on("changed", this.render.bind(this)),
+    );
+    this.render();
+  }
+
+  async render() {
+    if (!this.active) {
+      return;
+    }
+    this.lastEditor = this.app.workspace.activeEditor || this.lastEditor;
+    if (this.lastEditor && this.lastEditor.file) {
+      this.contentEl.replaceChildren(
+        await renderCard(this.app, this.lastEditor.file, this),
+      );
+    }
+  }
+
+  async renderToClipboard() {
+    const editor = this.app.workspace.activeEditor || this.lastEditor;
+    if (editor && editor.file) {
+      this.contentEl.empty();
+      let cardEl = await renderCard(this.app, editor.file, this);
+      this.contentEl.appendChild(cardEl);
+
+      let data = await toBlob(cardEl, {
+        pixelRatio: 3,
+      });
+      if (!data) {
+        throw new Error("Failed to convert card to blob");
+      }
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "image/png": data,
+        }),
+      ]);
+    }
+  }
+
+  async onClose() {
+    this.active = false;
   }
 }
+
+const renderCard = async (
+  app: App,
+  file: TFile,
+  component: Component,
+): Promise<HTMLElement> => {
+  const cardEl = createDiv({ cls: "card-forge-card" });
+  const headerEl = cardEl.createDiv({ cls: "cf-header" });
+  const titleEl = headerEl.createDiv({ cls: "cf-title" });
+  const typeEl = headerEl.createDiv({ cls: "cf-type" });
+  const bodyEl = cardEl.createDiv({ cls: "cf-body" });
+
+  const metadata = app.metadataCache.getFileCache(file)?.frontmatter || {};
+  titleEl.appendText(metadata["card-forge-title"] || file.basename);
+  typeEl.appendText(metadata["card-forge-type"] || "");
+  if (metadata["cssclasses"]) {
+    cardEl.classList.add(metadata["cssclasses"]);
+  }
+
+  MarkdownRenderer.render(
+    app,
+    await app.vault.cachedRead(file),
+    bodyEl,
+    file.path,
+    component,
+  );
+
+  return cardEl;
+};
