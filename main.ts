@@ -126,7 +126,7 @@ export class CardForgePreview extends ItemView {
       this.contentEl.appendChild(cardEl);
 
       let data = await toBlob(cardEl, {
-        pixelRatio: 3,
+        pixelRatio: 1,
       });
       if (!data) {
         throw new Error("Failed to convert card to blob");
