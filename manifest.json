@@ -1,11 +1,11 @@
 {
-  "id": "card-forge",
-  "name": "Card Forge",
-  "version": "1.0.0",
-  "minAppVersion": "0.15.0",
-  "description": "Convert notes into printable cards",
-  "author": "Carl Sverre",
-  "authorUrl": "https://carlsverre.com",
-  "fundingUrl": "https://github.com/sponsors/carlsverre",
-  "isDesktopOnly": false
+	"id": "card-forge",
+	"name": "Card Forge",
+	"version": "1.0.1",
+	"minAppVersion": "0.15.0",
+	"description": "Convert notes into printable cards",
+	"author": "Carl Sverre",
+	"authorUrl": "https://carlsverre.com",
+	"fundingUrl": "https://github.com/sponsors/carlsverre",
+	"isDesktopOnly": false
 }
