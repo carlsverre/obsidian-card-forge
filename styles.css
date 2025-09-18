@@ -8,7 +8,6 @@
 .card-forge-card {
   width: 2.5in;
   height: 3.5in;
-  border-radius: 2.5mm;
 
   background-color: var(--background-secondary-alt);
   border: 1mm solid var(--color-base-70);
@@ -18,7 +17,6 @@
     padding: 1mm 2mm;
     background-color: var(--color-base-70);
     color: var(--color-base-10);
-    border-radius: 1.5mm 1.5mm 0 0;
     text-transform: uppercase;
 
     .cf-title {
@@ -34,8 +32,12 @@
 
   .cf-body {
     padding: 1mm 2mm;
-    border-radius: 2.5mm;
     font-size: var(--font-smallest);
+
+    hr {
+        margin: 3mm -2mm;
+        border-top: var(--hr-thickness) dashed var(--color-base-50);
+    }
 
     ul {
       padding-left: 1.5em;
