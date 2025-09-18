@@ -1,6 +1,5 @@
 import {
   App,
-  base64ToArrayBuffer,
   Component,
   ItemView,
   MarkdownFileInfo,
@@ -11,7 +10,16 @@ import {
   WorkspaceLeaf,
 } from "obsidian";
 import { toBlob } from "html-to-image";
-import { Blob } from "buffer";
+
+type Maybe<T> = T | null | undefined;
+
+interface CardForgeSettings {
+  renderPath: string;
+}
+
+const DEFAULT_SETTINGS: CardForgeSettings = {
+  renderPath: "card-forge",
+};
 
 export default class CardForgePlugin extends Plugin {
   renderFrame: HTMLIFrameElement;
@@ -93,6 +101,12 @@ export class CardForgePreview extends ItemView {
           .setIcon("copy")
           .onClick(this.renderToClipboard.bind(this)),
       );
+      menu.addItem((item) =>
+        item
+          .setTitle("Render to file")
+          .setIcon("save")
+          .onClick(this.renderToFile.bind(this)),
+      );
       menu.showAtMouseEvent(event);
     });
 
@@ -118,25 +132,60 @@ export class CardForgePreview extends ItemView {
     }
   }
 
-  async renderToClipboard() {
+  currentEditorFile(): Maybe<TFile> {
     const editor = this.app.workspace.activeEditor || this.lastEditor;
-    if (editor && editor.file) {
-      this.contentEl.empty();
-      let cardEl = await renderCard(this.app, editor.file, this);
-      this.contentEl.appendChild(cardEl);
+    return editor?.file;
+  }
 
+  async renderToBlob(): Promise<Maybe<Blob>> {
+    let file = this.currentEditorFile();
+    if (file) {
+      this.contentEl.empty();
+      let cardEl = await renderCard(this.app, file, this);
+      this.contentEl.appendChild(cardEl);
       let data = await toBlob(cardEl, {
-        pixelRatio: 1,
+        pixelRatio: 3,
       });
-      if (!data) {
-        throw new Error("Failed to convert card to blob");
-      }
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "image/png": data,
-        }),
-      ]);
+      return data;
     }
+    return null;
+  }
+
+  async renderToClipboard() {
+    let data = await this.renderToBlob();
+    if (!data) {
+      throw new Error("Failed to render card to clipboard");
+    }
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "image/png": data,
+      }),
+    ]);
+  }
+
+  async renderToFile() {
+    let data = await (await this.renderToBlob())?.arrayBuffer();
+    let file = this.currentEditorFile();
+    if (!data || !file) {
+      throw new Error("Failed to render card to file");
+    }
+    const attachments = resolveAttachmentFolder(this.app, file);
+    const name = file.basename.toLowerCase().replace(" ", "-");
+    const path = `${attachments}/cf-${name}.png`;
+
+    let card = this.app.vault.getFileByPath(path);
+    if (card) {
+      await this.app.vault.modifyBinary(card, data);
+    } else {
+      card = await this.app.vault.createBinary(path, data);
+    }
+
+    // now update the `card-forge-image` property on the current editor file
+    this.app.fileManager.processFrontMatter(file, (meta) => {
+      meta["card-forge-image"] = this.app.fileManager
+        .generateMarkdownLink(card, file.path)
+        .replace(/^!/, "");
+    });
   }
 
   async onClose() {
@@ -172,3 +221,19 @@ const renderCard = async (
 
   return cardEl;
 };
+
+function resolveAttachmentFolder(app: App, file: TFile): string {
+  const setting = app.vault.getConfig<string>("attachmentFolderPath");
+  if (!setting) {
+    // Same folder as current file
+    return file.parent?.path ?? "";
+  }
+  if (setting.startsWith("./")) {
+    // Subfolder under current folder
+    return file.parent
+      ? `${file.parent.path}/${setting.slice(2)}`
+      : setting.slice(2);
+  }
+  // Fixed folder
+  return setting;
+}
