@@ -12,6 +12,8 @@
   background-color: var(--background-secondary-alt);
   border: 1mm solid var(--color-base-70);
 
+  overflow: hidden;
+
   .cf-header {
     display: flex;
     padding: 1mm 2mm;
