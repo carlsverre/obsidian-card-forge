@@ -5,7 +5,12 @@ import {
   MarkdownFileInfo,
   MarkdownRenderer,
   Menu,
+  Modal,
+  Notice,
   Plugin,
+  PluginSettingTab,
+  Setting,
+  TagCache,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
@@ -14,24 +19,18 @@ import { toBlob } from "html-to-image";
 type Maybe<T> = T | null | undefined;
 
 interface CardForgeSettings {
-  renderPath: string;
+  cardTag: string;
 }
 
 const DEFAULT_SETTINGS: CardForgeSettings = {
-  renderPath: "card-forge",
+  cardTag: "card",
 };
 
 export default class CardForgePlugin extends Plugin {
-  renderFrame: HTMLIFrameElement;
+  settings: CardForgeSettings;
 
   async onload() {
-    this.renderFrame = createEl("iframe", {
-      attr: {
-        style:
-          "position:fixed;left:-10000px;top:-10000px;width:0;height:0;visibility:hidden;",
-      },
-    });
-    this.app.workspace.containerEl.append(this.renderFrame);
+    await this.loadSettings();
 
     this.registerView(VIEW_TYPE_PREVIEW, (leaf) => new CardForgePreview(leaf));
 
@@ -42,9 +41,27 @@ export default class CardForgePlugin extends Plugin {
         await this.activatePreview();
       },
     });
+
+    this.addCommand({
+      id: "card-forge-render-cards",
+      name: "Render tagged cards",
+      callback: async () => {
+        await this.renderTaggedCards();
+      },
+    });
+
+    this.addSettingTab(new CardForgeSettingsTab(this.app, this));
   }
 
   onunload() {}
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
 
   async activatePreview() {
     const { workspace } = this.app;
@@ -62,10 +79,27 @@ export default class CardForgePlugin extends Plugin {
     }
 
     if (!leaf) {
-      throw new Error("failed to activate CardForgePreview");
+      new Notice("failed to activate CardForgePreview");
+      return;
     }
 
     workspace.revealLeaf(leaf);
+  }
+
+  async renderTaggedCards() {
+    let tag = this.settings.cardTag;
+    if (!tag) {
+      tag = DEFAULT_SETTINGS.cardTag;
+    }
+
+    let files = this.app.vault.getMarkdownFiles().filter((file) => {
+      let meta = this.app.metadataCache.getFileCache(file);
+      meta?.tags?.some((tc) => tc.tag == tag);
+    });
+
+    for (let file of files) {
+      await renderCardToFile(this.app, file, this);
+    }
   }
 }
 
@@ -137,24 +171,16 @@ export class CardForgePreview extends ItemView {
     return editor?.file;
   }
 
-  async renderToBlob(): Promise<Maybe<Blob>> {
-    let file = this.currentEditorFile();
-    if (file) {
-      this.contentEl.empty();
-      let cardEl = await renderCard(this.app, file, this);
-      this.contentEl.appendChild(cardEl);
-      let data = await toBlob(cardEl, {
-        pixelRatio: 3,
-      });
-      return data;
-    }
-    return null;
-  }
-
   async renderToClipboard() {
-    let data = await this.renderToBlob();
+    let file = this.currentEditorFile();
+    if (!file) {
+      new Notice("Failed to render card to clipboard");
+      return;
+    }
+    const data = await renderCardToBlob(this.app, file, this);
     if (!data) {
-      throw new Error("Failed to render card to clipboard");
+      new Notice("Failed to render card to clipboard");
+      return;
     }
     await navigator.clipboard.write([
       new ClipboardItem({
@@ -164,28 +190,12 @@ export class CardForgePreview extends ItemView {
   }
 
   async renderToFile() {
-    let data = await (await this.renderToBlob())?.arrayBuffer();
     let file = this.currentEditorFile();
-    if (!data || !file) {
-      throw new Error("Failed to render card to file");
-    }
-    const attachments = resolveAttachmentFolder(this.app, file);
-    const name = file.basename.toLowerCase().replace(" ", "-");
-    const path = `${attachments}/cf-${name}.png`;
-
-    let card = this.app.vault.getFileByPath(path);
-    if (card) {
-      await this.app.vault.modifyBinary(card, data);
+    if (file) {
+      await renderCardToFile(this.app, file, this);
     } else {
-      card = await this.app.vault.createBinary(path, data);
+      new Notice("Failed to render card to file");
     }
-
-    // now update the `card-forge-image` property on the current editor file
-    this.app.fileManager.processFrontMatter(file, (meta) => {
-      meta["card-forge-image"] = this.app.fileManager
-        .generateMarkdownLink(card, file.path)
-        .replace(/^!/, "");
-    });
   }
 
   async onClose() {
@@ -236,4 +246,95 @@ function resolveAttachmentFolder(app: App, file: TFile): string {
   }
   // Fixed folder
   return setting;
+}
+
+const renderCardToBlob = async (
+  app: App,
+  file: TFile,
+  component: Component,
+): Promise<Maybe<Blob>> => {
+  const cardEl = await renderCard(app, file, component);
+
+  const mount = createDiv();
+  Object.assign(mount.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    opacity: "0",
+    pointerEvents: "none",
+    zIndex: "-1",
+    contain: "layout style paint",
+  });
+  document.body.appendChild(mount);
+
+  try {
+    mount.appendChild(cardEl);
+
+    // wait for layout
+    await new Promise(requestAnimationFrame);
+
+    return await toBlob(cardEl, {
+      pixelRatio: 3,
+    });
+  } finally {
+    mount.remove();
+  }
+};
+
+const renderCardToFile = async (
+  app: App,
+  file: TFile,
+  component: Component,
+) => {
+  let data = await (
+    await renderCardToBlob(app, file, component)
+  )?.arrayBuffer();
+  if (!data) {
+    new Notice("Failed to render card to file");
+    return;
+  }
+
+  const attachments = resolveAttachmentFolder(app, file);
+  const name = file.basename.toLowerCase().replace(" ", "-");
+  const path = `${attachments}/cf-${name}.png`;
+
+  let card = app.vault.getFileByPath(path);
+  if (card) {
+    await app.vault.modifyBinary(card, data);
+  } else {
+    card = await app.vault.createBinary(path, data);
+  }
+
+  // now update the `card-forge-image` property on the current editor file
+  app.fileManager.processFrontMatter(file, (meta) => {
+    meta["card-forge-image"] = app.fileManager
+      .generateMarkdownLink(card, file.path)
+      .replace(/^!/, "");
+  });
+};
+
+class CardForgeSettingsTab extends PluginSettingTab {
+  plugin: CardForgePlugin;
+
+  constructor(app: App, plugin: CardForgePlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Card Forge Settings" });
+
+    new Setting(containerEl)
+      .setName("Card Tag")
+      .setDesc("Use this tag when bulk generating card images")
+      .addText((text) =>
+        text.setValue(this.plugin.settings.cardTag).onChange(async (value) => {
+          this.plugin.settings.cardTag = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+  }
 }
