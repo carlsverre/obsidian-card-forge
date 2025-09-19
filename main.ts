@@ -94,11 +94,17 @@ export default class CardForgePlugin extends Plugin {
 
     let files = this.app.vault.getMarkdownFiles().filter((file) => {
       let meta = this.app.metadataCache.getFileCache(file);
-      meta?.tags?.some((tc) => tc.tag == tag);
+      return meta?.frontmatter?.tags?.some((t: string) => t === tag);
     });
 
-    for (let file of files) {
-      await renderCardToFile(this.app, file, this);
+    let note = new Notice("Rendering cards...", 0);
+    try {
+      for (let file of files) {
+        note.setMessage(`Rendering card for ${file.basename}`);
+        await renderCardToFile(this.app, file, this);
+      }
+    } finally {
+      note.hide();
     }
   }
 }
@@ -296,7 +302,7 @@ const renderCardToFile = async (
 
   const attachments = resolveAttachmentFolder(app, file);
   const name = file.basename.toLowerCase().replace(" ", "-");
-  const path = `${attachments}/cf-${name}.png`;
+  const path = `${attachments}/cf-${name}.png`.replace(/^\/+/, "");
 
   let card = app.vault.getFileByPath(path);
   if (card) {
