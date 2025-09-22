@@ -20,6 +20,7 @@
     background-color: var(--color-base-70);
     color: var(--color-base-10);
     text-transform: uppercase;
+    align-items: center;
 
     .cf-title {
       flex: 1;
