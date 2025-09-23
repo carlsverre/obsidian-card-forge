@@ -301,7 +301,7 @@ const renderCardToFile = async (
   }
 
   const attachments = resolveAttachmentFolder(app, file);
-  const name = file.basename.toLowerCase().replace(" ", "-");
+  const name = file.basename.toLowerCase().replace(/ /g, "-");
   const path = `${attachments}/cf-${name}.png`.replace(/^\/+/, "");
 
   let card = app.vault.getFileByPath(path);
