@@ -9,18 +9,19 @@
   --bg-color: white;
   --border-color: #5c5c5c;
   --light-text-color: #fafafa;
-  --dark-text-color: #fafafa;
+  --dark-text-color: #111;
 
   --list-marker-color: #6c6c6c;
   --checked-color: #4c4c4c;
 
   --table-alt-row-color: #ddd;
 
-  width: 2.5in;
-  height: 3.5in;
+  width: 238px;
+  height: 332px;
 
   background-color: var(--bg-color);
   border: 1mm solid var(--border-color);
+  color: var(--dark-text-color);
 
   overflow: hidden;
 

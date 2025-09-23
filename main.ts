@@ -280,7 +280,7 @@ const renderCardToBlob = async (
     await new Promise(requestAnimationFrame);
 
     return await toBlob(cardEl, {
-      pixelRatio: 3,
+      pixelRatio: 4,
     });
   } finally {
     mount.remove();
