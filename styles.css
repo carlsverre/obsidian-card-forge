@@ -6,19 +6,29 @@
 }
 
 .card-forge-card {
+  --bg-color: white;
+  --border-color: #5c5c5c;
+  --light-text-color: #fafafa;
+  --dark-text-color: #fafafa;
+
+  --list-marker-color: #6c6c6c;
+  --checked-color: #4c4c4c;
+
+  --table-alt-row-color: #ddd;
+
   width: 2.5in;
   height: 3.5in;
 
-  background-color: var(--background-secondary-alt);
-  border: 1mm solid var(--color-base-70);
+  background-color: var(--bg-color);
+  border: 1mm solid var(--border-color);
 
   overflow: hidden;
 
   .cf-header {
     display: flex;
     padding: 1mm 2mm;
-    background-color: var(--color-base-70);
-    color: var(--color-base-10);
+    background-color: var(--border-color);
+    color: var(--light-text-color);
     text-transform: uppercase;
     align-items: center;
 
@@ -38,8 +48,8 @@
     font-size: var(--font-smallest);
 
     hr {
-        margin: 3mm -2mm;
-        border-top: var(--hr-thickness) dashed var(--color-base-50);
+      margin: 3mm -2mm;
+      border-top: var(--hr-thickness) dashed #7c7c7c;
     }
 
     ul {
@@ -76,7 +86,7 @@
           &::before {
             left: 0;
             content: "○";
-            color: var(--list-marker-color-hover);
+            color: var(--list-marker-color);
           }
 
           &.is-checked {
@@ -86,7 +96,7 @@
             &::before {
               left: 0;
               content: "●";
-              color: var(--list-marker-color-hover);
+              color: var(--checked-color);
             }
           }
 
@@ -98,16 +108,17 @@
     }
 
     table {
-        border-collapse: collapse;
-        border-spacing: 0 2px;
+      border-collapse: collapse;
+      border-spacing: 0 2px;
 
-        th, td {
-            padding: 2px 4px; 
-        }
+      th,
+      td {
+        padding: 2px 4px;
+      }
 
-        tr:nth-child(even) {
-            background-color: var(--color-base-40);
-        }
+      tr:nth-child(even) {
+        background-color: var(--table-alt-row-color);
+      }
     }
   }
 }
