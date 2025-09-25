@@ -26,6 +26,12 @@ const DEFAULT_SETTINGS: CardForgeSettings = {
   cardTag: "card",
 };
 
+export const VIEW_TYPE_PREVIEW = "card-forge-preview";
+
+export const FRONTMATTER_TYPE = "card-type";
+export const FRONTMATTER_TITLE = "card-title";
+export const FRONTMATTER_IMAGE = "card-image";
+
 export default class CardForgePlugin extends Plugin {
   settings: CardForgeSettings;
 
@@ -92,7 +98,19 @@ export default class CardForgePlugin extends Plugin {
       tag = DEFAULT_SETTINGS.cardTag;
     }
 
+    const templatesPlugin = this.app.internalPlugins.getPluginById("templates");
+    let templateFilter = undefined;
+    if (templatesPlugin?.enabled) {
+      const templateFolder = templatesPlugin.instance.options.folder;
+      templateFilter = (filename: string) =>
+        filename.startsWith(templateFolder);
+    }
+
     let files = this.app.vault.getMarkdownFiles().filter((file) => {
+      if (templateFilter && templateFilter(file.path)) {
+        console.log("CardForge: ignoring template", file.path);
+        return false;
+      }
       let meta = this.app.metadataCache.getFileCache(file);
       return meta?.frontmatter?.tags?.some((t: string) => t === tag);
     });
@@ -108,8 +126,6 @@ export default class CardForgePlugin extends Plugin {
     }
   }
 }
-
-export const VIEW_TYPE_PREVIEW = "card-forge-preview";
 
 export class CardForgePreview extends ItemView {
   active: boolean = false;
@@ -221,8 +237,8 @@ const renderCard = async (
   const bodyEl = cardEl.createDiv({ cls: "cf-body" });
 
   const metadata = app.metadataCache.getFileCache(file)?.frontmatter || {};
-  titleEl.appendText(metadata["card-forge-title"] || file.basename);
-  typeEl.appendText(metadata["card-forge-type"] || "");
+  titleEl.appendText(metadata[FRONTMATTER_TITLE] || file.basename);
+  typeEl.appendText(metadata[FRONTMATTER_TYPE] || "");
   if (metadata["cssclasses"]) {
     cardEl.classList.add(metadata["cssclasses"]);
   }
@@ -302,7 +318,7 @@ const renderCardToFile = async (
 
   let meta = app.metadataCache.getFileCache(file);
   let cf_type: string =
-    (meta?.frontmatter || {})["card-forge-type"] || "unknown";
+    (meta?.frontmatter || {})[FRONTMATTER_TYPE] || "unknown";
 
   const attachments = resolveAttachmentFolder(app, file);
   const name = file.basename.toLowerCase().replace(/ /g, "-");
@@ -315,9 +331,9 @@ const renderCardToFile = async (
     card = await app.vault.createBinary(path, data);
   }
 
-  // now update the `card-forge-image` property on the current editor file
+  // now update the `card-image` property on the current editor file
   app.fileManager.processFrontMatter(file, (meta) => {
-    meta["card-forge-image"] = app.fileManager
+    meta[FRONTMATTER_IMAGE] = app.fileManager
       .generateMarkdownLink(card, file.path)
       .replace(/^!/, "");
   });
