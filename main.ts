@@ -300,9 +300,13 @@ const renderCardToFile = async (
     return;
   }
 
+  let meta = app.metadataCache.getFileCache(file);
+  let cf_type: string =
+    (meta?.frontmatter || {})["card-forge-type"] || "unknown";
+
   const attachments = resolveAttachmentFolder(app, file);
   const name = file.basename.toLowerCase().replace(/ /g, "-");
-  const path = `${attachments}/cf-${name}.png`.replace(/^\/+/, "");
+  const path = `${attachments}/cf-${cf_type}-${name}.png`.replace(/^\/+/, "");
 
   let card = app.vault.getFileByPath(path);
   if (card) {
