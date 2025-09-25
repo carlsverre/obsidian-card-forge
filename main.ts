@@ -363,9 +363,16 @@ const renderCardToFile = async (
   let cf_type: string =
     (meta?.frontmatter || {})[FRONTMATTER_TYPE] || "unknown";
 
+  let cf_num: number =
+    parseInt((meta?.frontmatter || {})[FRONTMATTER_NUMBER], 10) || 0;
+  let cf_num_pad = cf_num <= 999 ? `00${cf_num}`.slice(-3) : `${cf_num}`;
+
   const attachments = resolveAttachmentFolder(app, file);
   const name = file.basename.toLowerCase().replace(/ /g, "-");
-  const path = `${attachments}/cf-${cf_type}-${name}.png`.replace(/^\/+/, "");
+  const path = `${attachments}/cf-${cf_type}-${cf_num_pad}-${name}.png`.replace(
+    /^\/+/,
+    "",
+  );
 
   let card = app.vault.getFileByPath(path);
   if (card) {
