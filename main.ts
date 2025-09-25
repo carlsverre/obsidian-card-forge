@@ -31,6 +31,7 @@ export const VIEW_TYPE_PREVIEW = "card-forge-preview";
 export const FRONTMATTER_TYPE = "card-type";
 export const FRONTMATTER_TITLE = "card-title";
 export const FRONTMATTER_IMAGE = "card-image";
+export const FRONTMATTER_NUMBER = "card-number";
 
 export default class CardForgePlugin extends Plugin {
   settings: CardForgeSettings;
@@ -53,6 +54,14 @@ export default class CardForgePlugin extends Plugin {
       name: "Render tagged cards",
       callback: async () => {
         await this.renderTaggedCards();
+      },
+    });
+
+    this.addCommand({
+      id: "card-forge-render-cards",
+      name: "Number cards",
+      callback: async () => {
+        await this.numberCards();
       },
     });
 
@@ -92,7 +101,7 @@ export default class CardForgePlugin extends Plugin {
     workspace.revealLeaf(leaf);
   }
 
-  async renderTaggedCards() {
+  async getAllCards(): Promise<TFile[]> {
     let tag = this.settings.cardTag;
     if (!tag) {
       tag = DEFAULT_SETTINGS.cardTag;
@@ -106,7 +115,7 @@ export default class CardForgePlugin extends Plugin {
         filename.startsWith(templateFolder);
     }
 
-    let files = this.app.vault.getMarkdownFiles().filter((file) => {
+    return this.app.vault.getMarkdownFiles().filter((file) => {
       if (templateFilter && templateFilter(file.path)) {
         console.log("CardForge: ignoring template", file.path);
         return false;
@@ -114,7 +123,10 @@ export default class CardForgePlugin extends Plugin {
       let meta = this.app.metadataCache.getFileCache(file);
       return meta?.frontmatter?.tags?.some((t: string) => t === tag);
     });
+  }
 
+  async renderTaggedCards() {
+    const files = await this.getAllCards();
     let note = new Notice("Rendering cards...", 0);
     try {
       for (let file of files) {
@@ -123,6 +135,29 @@ export default class CardForgePlugin extends Plugin {
       }
     } finally {
       note.hide();
+    }
+  }
+
+  async numberCards() {
+    const files = await this.getAllCards();
+    let nextNum = 1;
+
+    // update nextNum to be the largest existing card number
+    for (let file of files) {
+      const meta = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (meta && meta[FRONTMATTER_NUMBER] !== undefined) {
+        nextNum = Math.max(nextNum, meta[FRONTMATTER_NUMBER] + 1);
+      }
+    }
+
+    console.log("numbering cards without a number starting with", nextNum);
+
+    for (let file of files) {
+      this.app.fileManager.processFrontMatter(file, (meta: any) => {
+        if (meta[FRONTMATTER_NUMBER] === undefined) {
+          meta[FRONTMATTER_NUMBER] = nextNum++;
+        }
+      });
     }
   }
 }
@@ -232,15 +267,21 @@ const renderCard = async (
 ): Promise<HTMLElement> => {
   const cardEl = createDiv({ cls: "card-forge-card" });
   const headerEl = cardEl.createDiv({ cls: "cf-header" });
-  const titleEl = headerEl.createDiv({ cls: "cf-title" });
-  const typeEl = headerEl.createDiv({ cls: "cf-type" });
   const bodyEl = cardEl.createDiv({ cls: "cf-body" });
+  const footerEl = cardEl.createDiv({ cls: "cf-footer" });
+  const typeEl = footerEl.createDiv({ cls: "cf-type" });
+  const numberEl = footerEl.createDiv({ cls: "cf-number" });
 
   const metadata = app.metadataCache.getFileCache(file)?.frontmatter || {};
-  titleEl.appendText(metadata[FRONTMATTER_TITLE] || file.basename);
+  headerEl.appendText(metadata[FRONTMATTER_TITLE] || file.basename);
   typeEl.appendText(metadata[FRONTMATTER_TYPE] || "");
   if (metadata["cssclasses"]) {
     cardEl.classList.add(metadata["cssclasses"]);
+  }
+  if (metadata[FRONTMATTER_NUMBER]) {
+    let number = parseInt(metadata[FRONTMATTER_NUMBER], 10);
+    // pad number with zeroes
+    numberEl.appendText(number <= 999 ? `00${number}`.slice(-3) : `${number}`);
   }
 
   MarkdownRenderer.render(
@@ -297,6 +338,8 @@ const renderCardToBlob = async (
 
     return await toBlob(cardEl, {
       pixelRatio: 4,
+      width: 238,
+      height: 332,
     });
   } finally {
     mount.remove();

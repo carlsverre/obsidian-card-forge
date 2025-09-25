@@ -16,41 +16,59 @@
 
   --table-alt-row-color: #ddd;
 
+  --gap: 4px;
+
   width: 238px;
   height: 332px;
 
   background-color: var(--bg-color);
-  border: 1mm solid var(--border-color);
+  border: var(--gap) solid var(--border-color);
   color: var(--dark-text-color);
+
+  display: flex;
+  flex-direction: column;
 
   overflow: hidden;
 
   .cf-header {
-    display: flex;
-    padding: 1mm 2mm;
+    padding: var(--gap) calc(var(--gap) * 2);
     background-color: var(--border-color);
     color: var(--light-text-color);
     text-transform: uppercase;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  .cf-footer {
+    padding: var(--gap) calc(var(--gap) * 2);
+    background-color: var(--border-color);
+    color: var(--light-text-color);
+    text-transform: uppercase;
+    font-size: 10px;
+    line-height: 1;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
 
-    .cf-title {
-      flex: 1;
-
-      font-weight: var(--font-bold);
-      font-size: var(--font-ui-larger);
-    }
-    .cf-type {
-      font-size: var(--font-ui-smaller);
+    > * {
+      position: relative;
+      top: 1px;
     }
   }
 
   .cf-body {
-    padding: 1mm 2mm;
+    padding: var(--gap) calc(var(--gap) * 2);
     font-size: var(--font-smallest);
+    flex: 1;
 
     hr {
-      margin: 3mm -2mm;
+      margin: calc(var(--gap) * 3) calc(var(--gap) * -2);
       border-top: var(--hr-thickness) dashed #7c7c7c;
+    }
+
+    p {
+      margin: calc(var(--gap) * 2) 0;
     }
 
     ul {
