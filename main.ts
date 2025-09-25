@@ -58,7 +58,7 @@ export default class CardForgePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "card-forge-render-cards",
+      id: "card-forge-number-cards",
       name: "Number cards",
       callback: async () => {
         await this.numberCards();
