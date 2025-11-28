@@ -171,7 +171,7 @@ export class CardForgePreview extends ItemView {
   }
 
   getDisplayText() {
-    return "Card Forge Preview";
+    return "Card forge preview";
   }
 
   async onOpen() {
