@@ -5,12 +5,10 @@ import {
   MarkdownFileInfo,
   MarkdownRenderer,
   Menu,
-  Modal,
   Notice,
   Plugin,
   PluginSettingTab,
   Setting,
-  TagCache,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
@@ -42,15 +40,15 @@ export default class CardForgePlugin extends Plugin {
     this.registerView(VIEW_TYPE_PREVIEW, (leaf) => new CardForgePreview(leaf));
 
     this.addCommand({
-      id: "card-forge-open-preview",
-      name: "Open Preview",
+      id: "open-preview",
+      name: "Open preview",
       callback: async () => {
         await this.activatePreview();
       },
     });
 
     this.addCommand({
-      id: "card-forge-render-cards",
+      id: "render-cards",
       name: "Render tagged cards",
       callback: async () => {
         await this.renderTaggedCards();
@@ -58,7 +56,7 @@ export default class CardForgePlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "card-forge-number-cards",
+      id: "number-cards",
       name: "Number cards",
       callback: async () => {
         await this.numberCards();
@@ -94,14 +92,14 @@ export default class CardForgePlugin extends Plugin {
     }
 
     if (!leaf) {
-      new Notice("failed to activate CardForgePreview");
+      new Notice("Failed to activate card preview");
       return;
     }
 
-    workspace.revealLeaf(leaf);
+    await workspace.revealLeaf(leaf);
   }
 
-  async getAllCards(): Promise<TFile[]> {
+  getAllCards(): TFile[] {
     let tag = this.settings.cardTag;
     if (!tag) {
       tag = DEFAULT_SETTINGS.cardTag;
@@ -117,7 +115,6 @@ export default class CardForgePlugin extends Plugin {
 
     return this.app.vault.getMarkdownFiles().filter((file) => {
       if (templateFilter && templateFilter(file.path)) {
-        console.log("CardForge: ignoring template", file.path);
         return false;
       }
       let meta = this.app.metadataCache.getFileCache(file);
@@ -126,7 +123,7 @@ export default class CardForgePlugin extends Plugin {
   }
 
   async renderTaggedCards() {
-    const files = await this.getAllCards();
+    const files = this.getAllCards();
     let note = new Notice("Rendering cards...", 0);
     try {
       for (let file of files) {
@@ -139,7 +136,7 @@ export default class CardForgePlugin extends Plugin {
   }
 
   async numberCards() {
-    const files = await this.getAllCards();
+    const files = this.getAllCards();
     let nextNum = 1;
 
     // update nextNum to be the largest existing card number
@@ -150,10 +147,8 @@ export default class CardForgePlugin extends Plugin {
       }
     }
 
-    console.log("numbering cards without a number starting with", nextNum);
-
     for (let file of files) {
-      this.app.fileManager.processFrontMatter(file, (meta: any) => {
+      await this.app.fileManager.processFrontMatter(file, (meta) => {
         if (meta[FRONTMATTER_NUMBER] === undefined) {
           meta[FRONTMATTER_NUMBER] = nextNum++;
         }
@@ -208,7 +203,7 @@ export class CardForgePreview extends ItemView {
     this.registerEvent(
       this.app.metadataCache.on("changed", this.render.bind(this)),
     );
-    this.render();
+    await this.render();
   }
 
   async render() {
@@ -284,7 +279,7 @@ const renderCard = async (
     numberEl.appendText(number <= 999 ? `00${number}`.slice(-3) : `${number}`);
   }
 
-  MarkdownRenderer.render(
+  await MarkdownRenderer.render(
     app,
     await app.vault.cachedRead(file),
     bodyEl,
@@ -319,15 +314,7 @@ const renderCardToBlob = async (
   const cardEl = await renderCard(app, file, component);
 
   const mount = createDiv();
-  Object.assign(mount.style, {
-    position: "fixed",
-    left: "-10000px",
-    top: "0",
-    opacity: "0",
-    pointerEvents: "none",
-    zIndex: "-1",
-    contain: "layout style paint",
-  });
+  mount.className = "card-forge-render-surface";
   document.body.appendChild(mount);
 
   try {
@@ -382,7 +369,7 @@ const renderCardToFile = async (
   }
 
   // now update the `card-image` property on the current editor file
-  app.fileManager.processFrontMatter(file, (meta) => {
+  await app.fileManager.processFrontMatter(file, (meta) => {
     meta[FRONTMATTER_IMAGE] = app.fileManager
       .generateMarkdownLink(card, file.path)
       .replace(/^!/, "");
@@ -397,14 +384,13 @@ class CardForgeSettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  display(): void {
+  display() {
     const { containerEl } = this;
 
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Card Forge Settings" });
 
     new Setting(containerEl)
-      .setName("Card Tag")
+      .setName("Card tag")
       .setDesc("Use this tag when bulk generating card images")
       .addText((text) =>
         text.setValue(this.plugin.settings.cardTag).onChange(async (value) => {

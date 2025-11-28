@@ -9,7 +9,16 @@ declare module "obsidian" {
     internalPlugins: PluginManager;
   }
 
+  interface InternalPlugin {
+    enabled: boolean;
+    instance: {
+      options: {
+        folder: string;
+      };
+    };
+  }
+
   interface PluginManager {
-    getPluginById(id: string): any;
+    getPluginById(id: string): InternalPlugin | undefined;
   }
 }

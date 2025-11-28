@@ -4,6 +4,16 @@
   justify-content: center;
 }
 
+.card-forge-render-surface {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  contain: layout style paint;
+}
+
 .card-forge-card {
   --bg-color: white;
   --border-color: #5c5c5c;
@@ -60,6 +70,10 @@
     padding: var(--gap) calc(var(--gap) * 2);
     font-size: var(--font-smallest);
     flex: 1;
+
+    * {
+      color: var(--dark-text-color);
+    }
 
     hr {
       margin: calc(var(--gap) * 3) calc(var(--gap) * -2);
