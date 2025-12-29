@@ -69,7 +69,11 @@ export default class CardForgePlugin extends Plugin {
   onunload() {}
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      (await this.loadData()) as Partial<CardForgeSettings> | null,
+    );
   }
 
   async saveSettings() {
@@ -117,8 +121,9 @@ export default class CardForgePlugin extends Plugin {
       if (templateFilter && templateFilter(file.path)) {
         return false;
       }
-      let meta = this.app.metadataCache.getFileCache(file);
-      return meta?.frontmatter?.tags?.some((t: string) => t === tag);
+      const meta = this.app.metadataCache.getFileCache(file);
+      const tags = meta?.frontmatter?.tags as string[] | undefined;
+      return tags?.some((t) => t === tag);
     });
   }
 
@@ -140,19 +145,23 @@ export default class CardForgePlugin extends Plugin {
     let nextNum = 1;
 
     // update nextNum to be the largest existing card number
-    for (let file of files) {
+    for (const file of files) {
       const meta = this.app.metadataCache.getFileCache(file)?.frontmatter;
-      if (meta && meta[FRONTMATTER_NUMBER] !== undefined) {
-        nextNum = Math.max(nextNum, meta[FRONTMATTER_NUMBER] + 1);
+      const cardNum = meta?.[FRONTMATTER_NUMBER] as number | undefined;
+      if (cardNum !== undefined) {
+        nextNum = Math.max(nextNum, cardNum + 1);
       }
     }
 
-    for (let file of files) {
-      await this.app.fileManager.processFrontMatter(file, (meta) => {
-        if (meta[FRONTMATTER_NUMBER] === undefined) {
-          meta[FRONTMATTER_NUMBER] = nextNum++;
-        }
-      });
+    for (const file of files) {
+      await this.app.fileManager.processFrontMatter(
+        file,
+        (meta: Record<string, unknown>) => {
+          if (meta[FRONTMATTER_NUMBER] === undefined) {
+            meta[FRONTMATTER_NUMBER] = nextNum++;
+          }
+        },
+      );
     }
   }
 }
@@ -185,23 +194,23 @@ export class CardForgePreview extends ItemView {
         item
           .setTitle("Copy to clipboard")
           .setIcon("copy")
-          .onClick(this.renderToClipboard.bind(this)),
+          .onClick(() => this.renderToClipboard()),
       );
       menu.addItem((item) =>
         item
           .setTitle("Render to file")
           .setIcon("save")
-          .onClick(this.renderToFile.bind(this)),
+          .onClick(() => this.renderToFile()),
       );
       menu.showAtMouseEvent(event);
     });
 
     this.registerEvent(
-      this.app.workspace.on("file-open", this.render.bind(this)),
+      this.app.workspace.on("file-open", () => this.render()),
     );
-    this.registerEvent(this.app.vault.on("modify", this.render.bind(this)));
+    this.registerEvent(this.app.vault.on("modify", () => this.render()));
     this.registerEvent(
-      this.app.metadataCache.on("changed", this.render.bind(this)),
+      this.app.metadataCache.on("changed", () => this.render()),
     );
     await this.render();
   }
@@ -267,16 +276,19 @@ const renderCard = async (
   const typeEl = footerEl.createDiv({ cls: "cf-type" });
   const numberEl = footerEl.createDiv({ cls: "cf-number" });
 
-  const metadata = app.metadataCache.getFileCache(file)?.frontmatter || {};
-  headerEl.appendText(metadata[FRONTMATTER_TITLE] || file.basename);
-  typeEl.appendText(metadata[FRONTMATTER_TYPE] || "");
+  const metadata = (app.metadataCache.getFileCache(file)?.frontmatter ||
+    {}) as Record<string, unknown>;
+  headerEl.appendText((metadata[FRONTMATTER_TITLE] as string) || file.basename);
+  typeEl.appendText((metadata[FRONTMATTER_TYPE] as string) || "");
   if (metadata["cssclasses"]) {
-    cardEl.classList.add(metadata["cssclasses"]);
+    cardEl.classList.add(metadata["cssclasses"] as string);
   }
-  if (metadata[FRONTMATTER_NUMBER]) {
-    let number = parseInt(metadata[FRONTMATTER_NUMBER], 10);
+  const rawNumber = metadata[FRONTMATTER_NUMBER];
+  if (rawNumber !== undefined && typeof rawNumber === "number") {
     // pad number with zeroes
-    numberEl.appendText(number <= 999 ? `00${number}`.slice(-3) : `${number}`);
+    numberEl.appendText(
+      rawNumber <= 999 ? `00${rawNumber}`.slice(-3) : `${rawNumber}`,
+    );
   }
 
   await MarkdownRenderer.render(
@@ -346,12 +358,12 @@ const renderCardToFile = async (
     return;
   }
 
-  let meta = app.metadataCache.getFileCache(file);
-  let cf_type: string =
-    (meta?.frontmatter || {})[FRONTMATTER_TYPE] || "unknown";
+  const meta = app.metadataCache.getFileCache(file);
+  const frontmatter = (meta?.frontmatter || {}) as Record<string, unknown>;
+  const cf_type: string = (frontmatter[FRONTMATTER_TYPE] as string) || "unknown";
 
-  let cf_num: number =
-    parseInt((meta?.frontmatter || {})[FRONTMATTER_NUMBER], 10) || 0;
+  const rawNum = frontmatter[FRONTMATTER_NUMBER];
+  const cf_num: number = typeof rawNum === "number" ? rawNum : 0;
   let cf_num_pad = cf_num <= 999 ? `00${cf_num}`.slice(-3) : `${cf_num}`;
 
   const attachments = resolveAttachmentFolder(app, file);
@@ -369,11 +381,14 @@ const renderCardToFile = async (
   }
 
   // now update the `card-image` property on the current editor file
-  await app.fileManager.processFrontMatter(file, (meta) => {
-    meta[FRONTMATTER_IMAGE] = app.fileManager
-      .generateMarkdownLink(card, file.path)
-      .replace(/^!/, "");
-  });
+  await app.fileManager.processFrontMatter(
+    file,
+    (meta: Record<string, unknown>) => {
+      meta[FRONTMATTER_IMAGE] = app.fileManager
+        .generateMarkdownLink(card, file.path)
+        .replace(/^!/, "");
+    },
+  );
 };
 
 class CardForgeSettingsTab extends PluginSettingTab {
