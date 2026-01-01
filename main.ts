@@ -259,8 +259,9 @@ export class CardForgePreview extends ItemView {
     }
   }
 
-  async onClose() {
+  onClose(): Promise<void> {
     this.active = false;
+    return Promise.resolve();
   }
 }
 
