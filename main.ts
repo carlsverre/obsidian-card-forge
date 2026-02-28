@@ -133,7 +133,7 @@ export default class CardForgePlugin extends Plugin {
     try {
       for (let file of files) {
         note.setMessage(`Rendering card for ${file.basename}`);
-        await renderCardToFile(this.app, file, this);
+        await renderCardToFile(this.app, file);
       }
     } finally {
       note.hide();
@@ -169,6 +169,7 @@ export default class CardForgePlugin extends Plugin {
 export class CardForgePreview extends ItemView {
   active: boolean = false;
   lastEditor: MarkdownFileInfo | null;
+  renderComponent: Component | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -221,8 +222,11 @@ export class CardForgePreview extends ItemView {
     }
     this.lastEditor = this.app.workspace.activeEditor || this.lastEditor;
     if (this.lastEditor && this.lastEditor.file) {
+      this.renderComponent?.unload();
+      this.renderComponent = new Component();
+      this.renderComponent.load();
       this.contentEl.replaceChildren(
-        await renderCard(this.app, this.lastEditor.file, this),
+        await renderCard(this.app, this.lastEditor.file, this.renderComponent),
       );
     }
   }
@@ -238,7 +242,7 @@ export class CardForgePreview extends ItemView {
       new Notice("Failed to render card to clipboard");
       return;
     }
-    const data = await renderCardToBlob(this.app, file, this);
+    const data = await renderCardToBlob(this.app, file);
     if (!data) {
       new Notice("Failed to render card to clipboard");
       return;
@@ -253,7 +257,7 @@ export class CardForgePreview extends ItemView {
   async renderToFile() {
     let file = this.currentEditorFile();
     if (file) {
-      await renderCardToFile(this.app, file, this);
+      await renderCardToFile(this.app, file);
     } else {
       new Notice("Failed to render card to file");
     }
@@ -261,6 +265,8 @@ export class CardForgePreview extends ItemView {
 
   onClose(): Promise<void> {
     this.active = false;
+    this.renderComponent?.unload();
+    this.renderComponent = null;
     return Promise.resolve();
   }
 }
@@ -322,8 +328,9 @@ function resolveAttachmentFolder(app: App, file: TFile): string {
 const renderCardToBlob = async (
   app: App,
   file: TFile,
-  component: Component,
 ): Promise<Maybe<Blob>> => {
+  const component = new Component();
+  component.load();
   const cardEl = await renderCard(app, file, component);
 
   const mount = createDiv();
@@ -342,6 +349,7 @@ const renderCardToBlob = async (
       height: 332,
     });
   } finally {
+    component.unload();
     mount.remove();
   }
 };
@@ -349,10 +357,9 @@ const renderCardToBlob = async (
 const renderCardToFile = async (
   app: App,
   file: TFile,
-  component: Component,
 ) => {
   let data = await (
-    await renderCardToBlob(app, file, component)
+    await renderCardToBlob(app, file)
   )?.arrayBuffer();
   if (!data) {
     new Notice("Failed to render card to file");
