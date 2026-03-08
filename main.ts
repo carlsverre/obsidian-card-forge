@@ -83,16 +83,13 @@ export default class CardForgePlugin extends Plugin {
   async activatePreview() {
     const { workspace } = this.app;
 
-    let leaf: WorkspaceLeaf | null = null;
     const leaves = workspace.getLeavesOfType(VIEW_TYPE_PREVIEW);
+    const leaf = leaves[0] ?? workspace.getRightLeaf(false);
 
     if (leaves.length > 0) {
-      leaf = leaves[0];
-    } else {
-      leaf = workspace.getRightLeaf(false);
-      if (leaf) {
-        await leaf.setViewState({ type: VIEW_TYPE_PREVIEW, active: true });
-      }
+      // Reuse the existing preview leaf if one is already open.
+    } else if (leaf) {
+      await leaf.setViewState({ type: VIEW_TYPE_PREVIEW, active: true });
     }
 
     if (!leaf) {
@@ -167,9 +164,7 @@ export default class CardForgePlugin extends Plugin {
 }
 
 export class CardForgePreview extends ItemView {
-  active: boolean = false;
   lastEditor: MarkdownFileInfo | null;
-  renderComponent: Component | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -185,7 +180,6 @@ export class CardForgePreview extends ItemView {
   }
 
   async onOpen() {
-    this.active = true;
     this.contentEl.classList.add("card-forge-preview");
     this.contentEl.empty();
 
@@ -217,17 +211,13 @@ export class CardForgePreview extends ItemView {
   }
 
   async render() {
-    if (!this.active) {
-      return;
-    }
     this.lastEditor = this.app.workspace.activeEditor || this.lastEditor;
     if (this.lastEditor && this.lastEditor.file) {
-      this.renderComponent?.unload();
-      this.renderComponent = new Component();
-      this.renderComponent.load();
       this.contentEl.replaceChildren(
-        await renderCard(this.app, this.lastEditor.file, this.renderComponent),
+        await renderCard(this.app, this.lastEditor.file, this),
       );
+    } else {
+      this.contentEl.empty();
     }
   }
 
@@ -264,9 +254,7 @@ export class CardForgePreview extends ItemView {
   }
 
   onClose(): Promise<void> {
-    this.active = false;
-    this.renderComponent?.unload();
-    this.renderComponent = null;
+    this.contentEl.empty();
     return Promise.resolve();
   }
 }
